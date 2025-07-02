@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product Management</title>
+  <style>
+    .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+    .filter-section { margin: 20px 0; padding: 15px; background: #f5f5f5; }
+    .results { margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    .message { padding: 10px; margin: 10px 0; border-radius: 4px; }
+    .error { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+    .success { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    .info { background-color: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+    .loading { color: #666; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Product Management</h1>
+    
+    <div class="upload-section">
+      <h2>Upload CSV</h2>
+      <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="csv" accept=".csv" required>
+        <button type="submit">Upload</button>
+      </form>
+      <div id="uploadResult"></div>
+    </div>
+
+    <div class="filter-section">
+      <h2>Filter Products</h2>
+      <div>
+        <label>Style Code: <input type="text" id="style_code"></label>
+        <label>Option Code: <input type="text" id="option_code"></label>
+        <label>MRP: <input type="number" id="mrp"></label>
+        <label>Brick: 
+          <select id="brick">
+            <option value="">All</option>
+            <option value="Shirt">Shirt</option>
+            <option value="T-Shirt">T-Shirt</option>
+            <option value="Jeans">Jeans</option>
+            <option value="Trouser">Trouser</option>
+          </select>
+        </label>
+        <label>Sleeve: 
+          <select id="sleeve">
+            <option value="">All</option>
+            <option value="Full Sleeve">Full Sleeve</option>
+            <option value="Half Sleeve">Half Sleeve</option>
+            <option value="Sleeveless">Sleeveless</option>
+          </select>
+        </label>
+        <button onclick="loadData()">Apply Filters</button>
+      </div>
+    </div>
+
+    <div class="results">
+      <h2>Results (Grouped by Option Code)</h2>
+      <div id="resultsTable"></div>
+    </div>
+  </div>
+
+  <script>
+    function showMessage(elementId, message, type = 'info') {
+      const element = document.getElementById(elementId);
+      element.innerHTML = `<div class="message ${type}">${message}</div>`;
+    }
+
+    function clearMessage(elementId) {
+      document.getElementById(elementId).innerHTML = '';
+    }
+
+    function showLoading(elementId) {
+      document.getElementById(elementId).innerHTML = '<div class="message loading">Loading...</div>';
+    }
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fileInput = e.target.querySelector('input[type="file"]');
+      
+      if (!fileInput.files.length) {
+        showMessage('uploadResult', 'Please select a CSV file to upload', 'error');
+        return;
+      }
+
+      const formData = new FormData(e.target);
+      showMessage('uploadResult', 'Uploading file...', 'info');
+      
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Upload failed');
+        }
+
+        const result = await response.json();
+        
+        let message = `
+          <div class="success">
+            <p>${result.message || 'File uploaded successfully'}</p>
+            <p>Successfully processed: ${result.successCount} products</p>
+        `;
+        
+        if (result.errorCount) {
+          message += `
+            <p>Failed to process: ${result.errorCount} records</p>
+            ${result.errors ? `<p>Error details: ${result.errors.join(', ')}</p>` : ''}
+          `;
+        }
+        
+        message += '</div>';
+        document.getElementById('uploadResult').innerHTML = message;
+        
+        // Refresh the data after successful upload
+        loadData();
+      } catch (error) {
+        showMessage('uploadResult', `Upload failed: ${error.message}`, 'error');
+        console.error('Upload error:', error);
+      }
+    });
+
+    async function loadData() {
+      const params = new URLSearchParams();
+      const style_code = document.getElementById('style_code').value;
+      const option_code = document.getElementById('option_code').value;
+      const mrp = document.getElementById('mrp').value;
+      const brick = document.getElementById('brick').value;
+      const sleeve = document.getElementById('sleeve').value;
+
+      if (style_code) params.append('style_code', style_code);
+      if (option_code) params.append('option_code', option_code);
+      if (mrp) params.append('MRP', mrp);
+      if (brick) params.append('Brick', brick);
+      if (sleeve) params.append('Sleeve', sleeve);
+
+      showLoading('resultsTable');
+      
+      try {
+        const response = await fetch(`/api/grouped?${params.toString()}`);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch data');
+        }
+
+        const data = await response.json();
+        
+        if (!data || data.length === 0) {
+          showMessage('resultsTable', 'No products found matching your criteria', 'info');
+          return;
+        }
+        
+        let html = '<table><tr><th>Option Code</th><th>Count</th><th>Products</th></tr>';
+        
+        data.forEach(group => {
+          html += `<tr>
+            <td>${group._id || 'N/A'}</td>
+            <td>${group.count || 0}</td>
+            <td><ul>${
+              group.products.map(p => 
+                `<li>${p.style_code || 'N/A'} - ${p.EAN_code || 'N/A'} - ₹${p.MRP || 'N/A'}</li>`
+              ).join('')
+            }</ul></td>
+          </tr>`;
+        });
+        
+        html += '</table>';
+        document.getElementById('resultsTable').innerHTML = html;
+      } catch (error) {
+        showMessage('resultsTable', `Error loading data: ${error.message}`, 'error');
+        console.error('Data loading error:', error);
+      }
+    }
+
+    // Load initial data when page loads
+    loadData();
+  </script>
+</body>
+</html>
