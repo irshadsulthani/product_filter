@@ -6,7 +6,7 @@ const productSchema = new mongoose.Schema({
   EAN_code: { type: String, required: true, unique: true },
   MRP: { type: Number },
   Brick: { type: String, enum: ['Shirt', 'T-Shirt', 'Jeans', 'Trouser'] },
-  Sleeve: { type: String, enum: ['Full Sleeve', 'Half Sleeve', 'Sleeveless'] },
+  Sleeve: { type: String, enum: ['Full Sleeve', 'Half Sleeve', 'Sleeveless'],default: 'Sleeveless' },
 });
 
 module.exports = mongoose.model('Product', productSchema);

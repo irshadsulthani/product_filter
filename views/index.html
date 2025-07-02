@@ -107,14 +107,6 @@
             <p>${result.message || 'File uploaded successfully'}</p>
             <p>Successfully processed: ${result.successCount} products</p>
         `;
-        
-        if (result.errorCount) {
-          message += `
-            <p>Failed to process: ${result.errorCount} records</p>
-            ${result.errors ? `<p>Error details: ${result.errors.join(', ')}</p>` : ''}
-          `;
-        }
-        
         message += '</div>';
         document.getElementById('uploadResult').innerHTML = message;
         
@@ -151,7 +143,7 @@
         }
 
         const data = await response.json();
-        
+        console.log('Fetched data:', data);
         if (!data || data.length === 0) {
           showMessage('resultsTable', 'No products found matching your criteria', 'info');
           return;
@@ -178,8 +170,6 @@
         console.error('Data loading error:', error);
       }
     }
-
-    // Load initial data when page loads
     loadData();
   </script>
 </body>

@@ -7,6 +7,8 @@ const uploadCSV = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
+
+  const filePath = req.file.path;
   const products = [];
   const errors = [];
 
@@ -17,17 +19,20 @@ const uploadCSV = async (req, res) => {
       fs.createReadStream(filePath)
         .pipe(csv())
         .on("data", (row) => {
-            console.log("Parsed row:", row);
-            rawRows.push(row)})
+          console.log("Parsed row:", row);
+          rawRows.push(row);
+        })
         .on("end", resolve)
         .on("error", reject);
     });
 
     for (const row of rawRows) {
       try {
-        if (!row.style_code || !row.option_code || !row.MRP || !row.Brick || !row.Sleeve) {
+        if (!row.style_code || !row.option_code || !row.MRP || !row.Brick) {
           throw new Error("Missing required fields");
         }
+
+        const sleeveValue = row.Sleeve ? row.Sleeve.trim() : 'Sleeveless';
 
         let ean;
         let isUnique = false;
@@ -42,11 +47,14 @@ const uploadCSV = async (req, res) => {
           option_code: row.option_code.trim(),
           MRP: parseFloat(row.MRP),
           Brick: row.Brick.trim(),
-          Sleeve: row.Sleeve.trim(),
+          Sleeve: sleeveValue,
           EAN_code: ean,
         });
       } catch (err) {
-        errors.push({ row, error: err.message });
+        errors.push({ 
+          row: JSON.stringify(row), 
+          error: err.message 
+        });
       }
     }
 
@@ -57,7 +65,7 @@ const uploadCSV = async (req, res) => {
       message: "Products uploaded successfully",
       successCount: inserted.length,
       errorCount: errors.length,
-      errors,
+      errors: errors.map(e => `${e.error} in row: ${e.row}`),
     });
   } catch (error) {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
